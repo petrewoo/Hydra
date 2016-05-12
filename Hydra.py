@@ -5,7 +5,7 @@ from kazoo.client import KazooClient
 import kazoo.security as ks
 import logging
 import readline
-import json
+import yaml
 import pdb, traceback, sys
 
 #  logging.basicConfig(level=logging.DEBUG)
@@ -17,72 +17,83 @@ handler = logging.StreamHandler()
 fmt = logging.Formatter(FORMAT)
 handler.setFormatter(fmt)
 loggerM.addHandler(handler)
-COMMAND_SET = ('ls', 'add', 'create', 'delete', 'rmr', 'set', 'setAcl', 'get', 'getAcl', 'init', 'quit')
-CONFIG_FILE = 'zkSerconfig.json'
+COMMAND_SET = ('ls', 'add', 'create', 'delete', 'rmr', 'set', 'setAcl', 'get', 'getAcl', 'initcfg', 'quit')
+CONFIG_FILE = 'zkSerconfig.yaml'
+INIT_FILE = 'zkInitconfig.yaml'
 
 
 class Mykazoo(KazooClient):
     # TODO full command set just like ZooKeeper client
-    def ls(self, *args):
-        loggerM.debug('ls path is {}'.format(args[0]))
+    def __init__(self, initfile, *args, **kwargs):
+        self.init = initfile
+        super(Mykazoo, self).__init__(*args, **kwargs)
+
+    def ls(self, path):
+        loggerM.debug('ls path is {}'.format(path))
         try:
-            attr_list = self.get_children(args[0])
+            attr_list = self.get_children(path)
             attr_list.sort()
             for attr in attr_list:
                 print(attr)
         except:
-            loggerM.warn('{} try get_children wrong'.format(args[0]))
+            loggerM.warn('{} try get_children wrong'.format(path))
             pass
 
-    def _gls(self, *args):
-        attr_list = self.get_children(args[0]) or []
+    # TODO this is not a internal callable function
+    def _gls(self, path):
+        attr_list = self.get_children(path) or []
         return attr_list
 
-    def set(self, *args):
-        super(Mykazoo, self).set(args[0], args[1])
+    def set(self, path, value):
+        super(Mykazoo, self).set(path, value)
 
-    def setAcl(self, *args):
-        super(Mykazoo, self).set_acls(args[0], self.default_acl)
+    def setAcl(self, path):
+        super(Mykazoo, self).set_acls(path, self.default_acl)
 
-    def get(self, *args):
-        print('{}'.format(super(Mykazoo, self).get(args[0])[0]))
+    def get(self, path):
+        print('{}'.format(super(Mykazoo, self).get(path)[0]))
 
-    def getAcl(self, *args):
-        print('{}'.format(super(Mykazoo, self).get_acls(args[0])[0]))
+    def getAcl(self, path):
+        print('{}'.format(super(Mykazoo, self).get_acls(path)[0]))
 
-    def delete(self, *args):
-        loggerM.info('delete path is {}'.format(args[0]))
-        if not self.exists(args[0]):
-            loggerM.warn("Znode {} is empty".format(args[0]))
+    def delete(self, path):
+        loggerM.info('delete path is {}'.format(path))
+        if not self.exists(path):
+            loggerM.warn("Znode {} is empty".format(path))
             return
 
-        super(Mykazoo, self).delete(args[0])
+        super(Mykazoo, self).delete(path)
 
-    def rmr(self, *args):
-        loggerM.info('rmr path is {}'.format(args[0]))
-        if not self.exists(args[0]):
-            loggerM.warn("Znode {} is empty".format(args[0]))
+    def rmr(self, path):
+        loggerM.info('rmr path is {}'.format(path))
+        if not self.exists(path):
+            loggerM.warn("Znode {} is empty".format(path))
             return
 
-        super(Mykazoo, self).delete(args[0], recursive=True)
+        super(Mykazoo, self).delete(path, recursive=True)
 
-    def create(self, *args):
-        loggerM.info('create path is {}'.format(args[0]))
-        if not self.exists(args[0]):
-            super(Mykazoo, self).create(args[0], args[1], makepath=True)
+    def create(self, path, value):
+        loggerM.info('create path is {}'.format(path))
+        if not self.exists(path):
+            super(Mykazoo, self).create(path, value, makepath=True)
         else:
-            loggerM.warn("Znode {} Already exists...".format(args[0]))
+            loggerM.warn("Znode {} Already exists...".format(path))
 
-    def add(self, *args):
-        loggerM.info('createAcl path is {} acl is {}'.format(args[0], self.default_acl))
-        if not self.exists(args[0]):
-            self.ensure_path(args[0])
+    def add(self, path):
+        loggerM.info('createAcl path is {} acl is {}'.format(path, self.default_acl))
+        if not self.exists(path):
+            self.ensure_path(path)
         else:
-            loggerM.warn("Znode {} Already exists...".format(args[0]))
+            loggerM.warn("Znode {} Already exists...".format(path))
 
-    def init(self, *args):
-        # TODO i wanna init some config for zookeeper from config.json
-        pass
+    def initcfg(self):
+        # TODO i wanna init some config for zookeeper from init.yaml
+        loader = self._load_initconfig(self.init)
+        print loader
+
+    def _load_initconfig(self, file):
+        with open(file, 'r') as f:
+            return yaml.load(f)
 
     def usage(self):
         print("""Usage:
@@ -99,6 +110,7 @@ class Mykazoo(KazooClient):
               """)
 
 
+# TODO Mykazoo and MyCompleter need to be combined
 class MyCompleter(object):
     def __init__(self, options, zkServer):
         self.options = options
@@ -143,7 +155,7 @@ class MyCompleter(object):
 def utility(host, raw_auth_data=None, theme='digest'):
     usrpasswd = raw_auth_data.split(':')
     acl = [ks.make_digest_acl(usrpasswd[0], usrpasswd[1], all=True)]
-    zk = Mykazoo(host, timeout=10, default_acl=acl, auth_data=[(theme, raw_auth_data)])
+    zk = Mykazoo(INIT_FILE, host, timeout=10, default_acl=acl, auth_data=[(theme, raw_auth_data)])
     zk.start()
     try:
         readline.parse_and_bind('tab: complete')
@@ -169,23 +181,23 @@ def utility(host, raw_auth_data=None, theme='digest'):
         zk.stop()
 
 
+def load_config(file):
+    with open(file, 'r') as f:
+        return yaml.load(f)
+
+
 def main():
-    # TODO input zkconfig.json as param return index of config
+    # TODO input zkconfig.yaml as param return index of config
     # draw login screen based on return value of func load_config
     # add func parser_config to parse the index get the connect data of zk
     # draw a interacter screen(login) is very important
-    connData = interacter(load_config())
+    connData = interacter(load_config(CONFIG_FILE))
     if connData:
         utility(connData['server'], connData['auth'])
 
 
 def parser_config(data):
     pass
-
-
-def load_config():
-    with open(CONFIG_FILE, 'r') as f:
-        return json.load(f)
 
 
 # TODO convert to class
@@ -203,10 +215,10 @@ def interacter(menu):
     sumline = 0
     dictMenu = {}
     for title in menu:
-        screen.addstr(sumline, defaultY, 'Hydra >> {}.{}\n'.format(sumline, title))
+        screen.addstr(sumline, defaultY, 'Hydra >>> {}.{}\n'.format(sumline, title))
         dictMenu[sumline] = title
         sumline += 1
-    screen.addstr(sumline, defaultY, 'Hydra >> {}.Quit'.format(sumline))
+    screen.addstr(sumline, defaultY, 'Hydra >>> {}.Quit'.format(sumline))
     dictMenu[sumline] = 'Quit'
 
     cursor = 0
