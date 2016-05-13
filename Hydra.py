@@ -25,7 +25,7 @@ INIT_FILE = 'zkInitconfig.yaml'
 class Mykazoo(KazooClient):
     # TODO full command set just like ZooKeeper client
     def __init__(self, initfile, *args, **kwargs):
-        self.init = initfile
+        self.login_info= initfile
         super(Mykazoo, self).__init__(*args, **kwargs)
 
     def ls(self, path):
@@ -40,7 +40,7 @@ class Mykazoo(KazooClient):
             pass
 
     # TODO this is not a internal callable function
-    def _gls(self, path):
+    def auto_completer(self, path):
         attr_list = self.get_children(path) or []
         return attr_list
 
@@ -88,7 +88,7 @@ class Mykazoo(KazooClient):
 
     def initcfg(self):
         # TODO i wanna init some config for zookeeper from init.yaml
-        loader = self._load_initconfig(self.init)
+        loader = self._load_initconfig(self.login_info)
         print loader
 
     def _load_initconfig(self, file):
@@ -136,7 +136,7 @@ class MyCompleter(object):
                 if idx:
                     path = origline[idx + 1:begin]
                 loggerM.debug('path :{}'.format(path))
-                candidates = self.zkServer._gls(path)
+                candidates = self.zkServer.auto_completer(path)
                 loggerM.debug('candidates:'.format(candidates))
 
             if being_completed:
@@ -215,10 +215,10 @@ def interacter(menu):
     sumline = 0
     dictMenu = {}
     for title in menu:
-        screen.addstr(sumline, defaultY, 'Hydra >>> {}.{}\n'.format(sumline, title))
+        screen.addstr(sumline, defaultY, '> {}.{}\n'.format(sumline, title))
         dictMenu[sumline] = title
         sumline += 1
-    screen.addstr(sumline, defaultY, 'Hydra >>> {}.Quit'.format(sumline))
+    screen.addstr(sumline, defaultY, '> {}.Quit'.format(sumline))
     dictMenu[sumline] = 'Quit'
 
     cursor = 0
