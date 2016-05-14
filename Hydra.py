@@ -2,16 +2,16 @@
 # encoding: utf-8
 
 from kazoo.client import KazooClient
-import kazoo.security as ks
 import logging
 import readline
 import yaml
 import pdb, traceback, sys
 
+# TODO add logger utility for py module
 #  logging.basicConfig(level=logging.DEBUG)
 FORMAT = '%(asctime)s %(name)s %(levelname)s %(message)s'
 loggerM = logging.getLogger('Hydra.')
-#  loggerM.setLevel(logging.DEBUG)
+# loggerM.setLevel(logging.DEBUG)
 loggerM.setLevel(logging.INFO)
 handler = logging.StreamHandler()
 fmt = logging.Formatter(FORMAT)
@@ -24,8 +24,10 @@ INIT_FILE = 'zkInitconfig.yaml'
 
 class Mykazoo(KazooClient):
     # TODO full command set just like ZooKeeper client
-    def __init__(self, initfile, *args, **kwargs):
+    def __init__(self, initfile, options, *args, **kwargs):
         self.login_info= initfile
+        self.options = options
+        self.current_candidates = []
         super(Mykazoo, self).__init__(*args, **kwargs)
 
     def ls(self, path):
@@ -39,8 +41,7 @@ class Mykazoo(KazooClient):
             loggerM.warn('{} try get_children wrong'.format(path))
             pass
 
-    # TODO this is not a internal callable function
-    def auto_completer(self, path):
+    def _auto_completer(self, path):
         attr_list = self.get_children(path) or []
         return attr_list
 
@@ -95,29 +96,6 @@ class Mykazoo(KazooClient):
         with open(file, 'r') as f:
             return yaml.load(f)
 
-    def usage(self):
-        print("""Usage:
-                 delete path
-                 rmr path
-                 create path data
-                 add path
-                 ls path
-                 get path
-                 getAcl path
-                 set path data
-                 setAcl path
-                 init zk from config.json
-              """)
-
-
-# TODO Mykazoo and MyCompleter need to be combined
-class MyCompleter(object):
-    def __init__(self, options, zkServer):
-        self.options = options
-        self.zkServer = zkServer
-        self.current_candidates = []
-        return
-
     def complete(self, text, state):
         response = []
         if state == 0:
@@ -136,7 +114,7 @@ class MyCompleter(object):
                 if idx:
                     path = origline[idx + 1:begin]
                 loggerM.debug('path :{}'.format(path))
-                candidates = self.zkServer.auto_completer(path)
+                candidates = self._auto_completer(path)
                 loggerM.debug('candidates:'.format(candidates))
 
             if being_completed:
@@ -151,15 +129,41 @@ class MyCompleter(object):
         loggerM.debug('complete({}, {}) => {}'.format(repr(text), state, repr(response)))
         return response
 
+    def usage(self):
+        print("""Usage:
+                 delete path
+                 rmr path
+                 create path data
+                 add path
+                 ls path
+                 get path
+                 getAcl path
+                 set path data
+                 setAcl path
+                 init zk from config.json
+              """)
 
-def utility(host, raw_auth_data=None, theme='digest'):
-    usrpasswd = raw_auth_data.split(':')
-    acl = [ks.make_digest_acl(usrpasswd[0], usrpasswd[1], all=True)]
-    zk = Mykazoo(INIT_FILE, host, timeout=10, default_acl=acl, auth_data=[(theme, raw_auth_data)])
-    zk.start()
+
+# def utility(host, raw_auth_data=None, theme='digest'):
+def utility(raw_data):
+    # usrpasswd = raw_auth_data.split(':')
+    # acl = [ks.make_digest_acl(usrpasswd[0], usrpasswd[1], all=True)]
+    loggerM.info('{}'.format(raw_data))
+    host, acl, auth = parser_config(raw_data)
+    loggerM.info('host {}, acl {}, auth {}'.format(host, acl, auth))
+    zk = Mykazoo(INIT_FILE, COMMAND_SET, host, timeout=10, default_acl=acl, auth_data=auth)
+    # TODO more Exception process need to accomplish
+    try:
+        loggerM.info('ZkServer is connecting...')
+        zk.start()
+        loggerM.info('ZkServer is connected!')
+    except:
+        loggerM.warn('ZkServer connect failed')
+        return
+
     try:
         readline.parse_and_bind('tab: complete')
-        readline.set_completer(MyCompleter(COMMAND_SET, zk).complete)
+        readline.set_completer(zk.complete)
         while True:
             cmd = raw_input('>> ').split()
             if not cmd:
@@ -187,20 +191,44 @@ def load_config(file):
 
 
 def main():
-    # TODO input zkconfig.yaml as param return index of config
-    # draw login screen based on return value of func load_config
-    # add func parser_config to parse the index get the connect data of zk
-    # draw a interacter screen(login) is very important
-    connData = interacter(load_config(CONFIG_FILE))
-    if connData:
-        utility(connData['server'], connData['auth'])
+    loader =load_config(CONFIG_FILE)
+    # loop for zkServer selecet screen, i can change connection as i wish
+    while True:
+        # TODO check if Quit is selected let loop break
+        # TODO check interrupt from Keyboard
+        connData = interacter(loader)
+        if connData:
+            # utility(connData['server'], connData['auth'])
+            utility(connData)
+        else:
+            break
 
 
 def parser_config(data):
-    pass
+    import kazoo.security as ks
+    for k, v in data.iteritems():
+        if k == 'server':
+            host = v
+        elif k == 'auth':
+            raw_auth_data = v
+        else:
+            loggerM.warn('invalid k {}, v {} in the config data'.format(k, v))
+            pass
+
+    # TODO check server is None
+    if raw_auth_data:
+        auth = []
+        usrpasswd = raw_auth_data.split(':')
+        acl = [ks.make_digest_acl(usrpasswd[0], usrpasswd[1], all=True)]
+        auth.append(('digest', raw_auth_data))
+    else:
+        acl = None
+        auth = None
+
+    return host, acl, auth
 
 
-# TODO convert to class
+# TODO convert to class, interacter login screen
 def interacter(menu):
     import curses
     defaultY = 0
