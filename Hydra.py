@@ -61,17 +61,15 @@ class Mykazoo(KazooClient):
         loggerM.info('delete path is {}'.format(path))
         if not self.exists(path):
             loggerM.warn("Znode {} is empty".format(path))
-            return
-
-        super(Mykazoo, self).delete(path)
+        else:
+            super(Mykazoo, self).delete(path)
 
     def rmr(self, path):
         loggerM.info('rmr path is {}'.format(path))
         if not self.exists(path):
             loggerM.warn("Znode {} is empty".format(path))
-            return
-
-        super(Mykazoo, self).delete(path, recursive=True)
+        else:
+            super(Mykazoo, self).delete(path, recursive=True)
 
     def create(self, path, value):
         loggerM.info('create path is {}'.format(path))
@@ -144,15 +142,11 @@ class Mykazoo(KazooClient):
               """)
 
 
-# def utility(host, raw_auth_data=None, theme='digest'):
 def utility(raw_data):
-    # usrpasswd = raw_auth_data.split(':')
-    # acl = [ks.make_digest_acl(usrpasswd[0], usrpasswd[1], all=True)]
-    loggerM.info('{}'.format(raw_data))
     host, acl, auth = parser_config(raw_data)
-    loggerM.info('host {}, acl {}, auth {}'.format(host, acl, auth))
+    loggerM.debug('host {}, acl {}, auth {}'.format(host, acl, auth))
     zk = Mykazoo(INIT_FILE, COMMAND_SET, host, timeout=10, default_acl=acl, auth_data=auth)
-    # TODO more Exception process need to accomplish
+    # TODO more Exception process need to accomplish eg. connect timeout
     try:
         loggerM.info('ZkServer is connecting...')
         zk.start()
@@ -191,14 +185,13 @@ def load_config(file):
 
 
 def main():
-    loader =load_config(CONFIG_FILE)
+    loader = load_config(CONFIG_FILE)
     # loop for zkServer selecet screen, i can change connection as i wish
     while True:
         # TODO check if Quit is selected let loop break
         # TODO check interrupt from Keyboard
         connData = interacter(loader)
         if connData:
-            # utility(connData['server'], connData['auth'])
             utility(connData)
         else:
             break
@@ -215,7 +208,12 @@ def parser_config(data):
             loggerM.warn('invalid k {}, v {} in the config data'.format(k, v))
             pass
 
-    # TODO check server is None
+    # TODO If None in config file, raise Exception
+    if not host:
+        loggerM.warn('Invalid value in config file, plz check out.')
+        raise
+
+    # If raw_auth_data is None, login as anonymous
     if raw_auth_data:
         auth = []
         usrpasswd = raw_auth_data.split(':')
