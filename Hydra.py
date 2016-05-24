@@ -1,14 +1,14 @@
 #!/usr/bin/env python
-# encoding: utf-8
+# -*- encoding: utf-8 -*-
 
 from kazoo.client import KazooClient
 import logging
 import readline
 import yaml
-import pdb, traceback, sys
+# import pdb, traceback, sys
 
 # TODO add logger utility for py module
-#  logging.basicConfig(level=logging.DEBUG)
+# logging.basicConfig(level=logging.DEBUG)
 FORMAT = '%(asctime)s %(name)s %(levelname)s %(message)s'
 loggerM = logging.getLogger('Hydra.')
 # loggerM.setLevel(logging.DEBUG)
@@ -24,7 +24,8 @@ INIT_FILE = 'zkInitconfig.yaml'
 
 class Mykazoo(KazooClient):
     # TODO full command set just like ZooKeeper client
-    def __init__(self, initfile, options, *args, **kwargs):
+    # TODO Mykazoo without initfile and options Mykazoo is KazooClient
+    def __init__(self, initfile=None, options=None, *args, **kwargs):
         self.login_info= initfile
         self.options = options
         self.current_candidates = []
@@ -57,6 +58,7 @@ class Mykazoo(KazooClient):
     def getAcl(self, path):
         print('{}'.format(super(Mykazoo, self).get_acls(path)[0]))
 
+    # TODO delete command support regular expression operations yep that is cool
     def delete(self, path):
         loggerM.info('delete path is {}'.format(path))
         if not self.exists(path):
@@ -87,6 +89,10 @@ class Mykazoo(KazooClient):
 
     def initcfg(self):
         # TODO i wanna init some config for zookeeper from init.yaml
+        if not self.login_info:
+            loggerM.warn('Init file not specified, plz check out...')
+            return
+
         loader = self._load_initconfig(self.login_info)
         print loader
 
@@ -95,6 +101,9 @@ class Mykazoo(KazooClient):
             return yaml.load(f)
 
     def complete(self, text, state):
+        if not self.options:
+            return
+
         response = []
         if state == 0:
             origline = readline.get_line_buffer()
@@ -138,22 +147,33 @@ class Mykazoo(KazooClient):
                  getAcl path
                  set path data
                  setAcl path
-                 init zk from config.json
+                 initcfg InitConfig.sample.yaml
               """)
 
 
-def utility(raw_data):
-    host, acl, auth = parser_config(raw_data)
+def console(raw_data):
+    try:
+        host, acl, auth = parser_config(raw_data)
+    except:
+        raise RuntimeError
+
     loggerM.debug('host {}, acl {}, auth {}'.format(host, acl, auth))
-    zk = Mykazoo(INIT_FILE, COMMAND_SET, host, timeout=10, default_acl=acl, auth_data=auth)
+
+    try:
+        zk = Mykazoo(INIT_FILE, COMMAND_SET, host, default_acl=acl, auth_data=auth)
+    except:
+        pass
+
     # TODO more Exception process need to accomplish eg. connect timeout
     try:
         loggerM.info('ZkServer is connecting...')
         zk.start()
         loggerM.info('ZkServer is connected!')
+    except KeyboardInterrupt:
+        raise KeyboardInterrupt
     except:
         loggerM.warn('ZkServer connect failed')
-        return
+        return RuntimeError
 
     try:
         readline.parse_and_bind('tab: complete')
@@ -168,9 +188,9 @@ def utility(raw_data):
                 try:
                     getattr(zk, cmd[0])(*cmd[1:])
                 except:
-                    type, value, tb = sys.exc_info()
-                    traceback.print_exc()
-                    pdb.post_mortem(tb)
+                    # type, value, tb = sys.exc_info()
+                    # traceback.print_exc()
+                    # pdb.post_mortem(tb)
                     loggerM.warn('api {} call failed!!'.format(cmd[0]))
                     getattr(zk, 'usage')()
             else:
@@ -186,13 +206,19 @@ def load_config(file):
 
 def main():
     loader = load_config(CONFIG_FILE)
-    # loop for zkServer selecet screen, i can change connection as i wish
+    # loop for zkServer selecet screen, you can change connection as you wish
+    # TODO sorted loader should display on menu list
     while True:
-        # TODO check if Quit is selected let loop break
-        # TODO check interrupt from Keyboard
         connData = interacter(loader)
         if connData:
-            utility(connData)
+            try:
+                console(connData)
+            except KeyboardInterrupt:
+                loggerM.warn('Interrupt From Keyboard, Quit...')
+                break
+            except:
+                loggerM.warn('Something wrong happened, Quit gracefully...')
+                break
         else:
             break
 
@@ -201,17 +227,18 @@ def parser_config(data):
     import kazoo.security as ks
     for k, v in data.iteritems():
         if k == 'server':
-            host = v
+            host = v or ''
         elif k == 'auth':
-            raw_auth_data = v
+            raw_auth_data = v or ''
         else:
-            loggerM.warn('invalid k {}, v {} in the config data'.format(k, v))
+            loggerM.warn('Invalid k {}, v {} in the config data'.format(k, v))
             pass
 
+    loggerM.debug('Load data host is {}, raw_auth_data is {}'.format(host, raw_auth_data))
     # TODO If None in config file, raise Exception
     if not host:
         loggerM.warn('Invalid value in config file, plz check out.')
-        raise
+        raise RuntimeError
 
     # If raw_auth_data is None, login as anonymous
     if raw_auth_data:
@@ -269,6 +296,8 @@ def interacter(menu):
                     cursor = 0
             screen.move(cursor, cursorY)
             screen.refresh()
+    except KeyboardInterrupt:
+        return False
     finally:
         curses.endwin()
 
