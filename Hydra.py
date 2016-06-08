@@ -5,6 +5,7 @@ from kazoo.client import KazooClient
 import logging
 import readline
 import yaml
+import yamlordereddictloader
 # import pdb, traceback, sys
 
 # TODO add logger utility for py module
@@ -98,7 +99,7 @@ class Mykazoo(KazooClient):
 
     def _load_initconfig(self, file):
         with open(file, 'r') as f:
-            return yaml.load(f)
+            return yaml.load(f, Loader=yamlordereddictloader.Loader)
 
     def complete(self, text, state):
         if not self.options:
@@ -201,13 +202,11 @@ def console(raw_data):
 
 def load_config(file):
     with open(file, 'r') as f:
-        return yaml.load(f)
+        return yaml.load(f, Loader=yamlordereddictloader.Loader)
 
 
 def main():
     loader = load_config(CONFIG_FILE)
-    # loop for zkServer selecet screen, you can change connection as you wish
-    # TODO sorted loader should display on menu list
     while True:
         connData = interacter(loader)
         if connData:
