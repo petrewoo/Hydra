@@ -6,6 +6,7 @@ import logging
 import readline
 import yaml
 import yamlordereddictloader
+import termbox
 # import pdb, traceback, sys
 
 # TODO add logger utility for py module
@@ -152,7 +153,7 @@ class Mykazoo(KazooClient):
               """)
 
 
-def console(raw_data):
+def console(raw_data, iterm_name):
     try:
         host, acl, auth = parser_config(raw_data)
     except:
@@ -180,7 +181,7 @@ def console(raw_data):
         readline.parse_and_bind('tab: complete')
         readline.set_completer(zk.complete)
         while True:
-            cmd = raw_input('>> ').split()
+            cmd = raw_input('[{}]>> '.format(iterm_name)).split()
             if not cmd:
                 continue
             elif cmd[0] == 'up':
@@ -208,10 +209,17 @@ def load_config(file):
 def main():
     loader = load_config(CONFIG_FILE)
     while True:
-        connData = interacter(loader)
-        if connData:
+        # conn_data, show_name = interacter(loader)
+        conn_data, show_name = interacter1(loader)
+        print('My thing start!')
+        print('conn_data:\n {}'.format(conn_data))
+        print('show_name:\n {}'.format(show_name))
+        print('My thing end!')
+        return
+
+        if conn_data:
             try:
-                console(connData)
+                console(conn_data, show_name)
             except KeyboardInterrupt:
                 loggerM.warn('Interrupt From Keyboard, Quit...')
                 break
@@ -282,7 +290,7 @@ def interacter(menu):
                 if cursor == sumline:
                     return False
                 else:
-                    return menu[dictMenu[cursor]]
+                    return menu[dictMenu[cursor]], dictMenu[cursor]
             elif event == curses.KEY_UP:
                 if cursor == 0:
                     cursor = sumline
@@ -299,6 +307,95 @@ def interacter(menu):
         return False
     finally:
         curses.endwin()
+
+
+class SelectBox(object):
+    def __init__(self, tb, choices, active=-1):
+        self.tb = tb
+        tb.select_output_mode(2)
+        self.active = active
+        self.choices = choices
+        self.color_active = (termbox.CYAN | termbox.BOLD, 0xec)
+        self.color_normal = (termbox.CYAN, termbox.DEFAULT)
+        self.color_arrow_active = (termbox.BLACK | termbox.BOLD, 0xec)
+        self.color_arrow_normal = (termbox.BLACK, 0xec)
+
+    def draw(self):
+        for i, c in enumerate(self.choices):
+            arrow_color = self.color_arrow_normal
+            color = self.color_normal
+            if i == self.active:
+                arrow_color = self.color_arrow_active
+                color = self.color_active
+                header = '>'
+            else:
+                header = ' '
+            content = ' {}.'.format(i) + c
+            self._print_line(self.tb, header, 0, i, *arrow_color)
+            self._print_line(self.tb, content, 1, i, *color)
+
+    def validate_active(self):
+        if self.active < 0:
+            self.active = len(self.choices) - 1
+        if self.active >= len(self.choices):
+            self.active = 0
+
+    def set_active(self, i):
+        self.active = i
+        self.validate_active()
+
+    def move_up(self):
+        self.active -= 1
+        self.validate_active()
+
+    def move_down(self):
+        self.active += 1
+        self.validate_active()
+
+    def _print_line(self, tb, msg, x, y, fg, bg):
+        spaceord = ord(u" ")
+        l = len(msg)
+        for i in range(l):
+            c = spaceord
+            if i < l:
+                c = ord(msg[i])
+            tb.change_cell(x + i, y, c, fg, bg)
+
+
+def interacter1(menu):
+    with termbox.Termbox() as t:
+        sb = SelectBox(t, menu, 0)
+        t.clear()
+        sb.draw()
+        t.present()
+        i = 0
+        run_app = True
+        while run_app:
+            event_here = t.poll_event()
+            while event_here:
+                (type, ch, key, mod, w, h, x, y) = event_here
+                if type == termbox.EVENT_KEY and key == termbox.KEY_ESC:
+                    run_app = False
+                    return 'xxx', 'xxx'
+                if type == termbox.EVENT_KEY:
+                    if key == termbox.KEY_CTRL_J or key == termbox.KEY_ARROW_DOWN:
+                        sb.move_down()
+                    elif key == termbox.KEY_CTRL_K or key == termbox.KEY_ARROW_UP:
+                        sb.move_up()
+                    elif key == termbox.KEY_CTRL_U:
+                        sb.set_active(0)
+                    elif key == termbox.KEY_CTRL_D:
+                        sb.set_active(len(sb.choices) - 1)
+                    # TODO enter process need to accomplish
+                    elif key == termbox.KEY_ENTER:
+                        pass
+                event_here = t.peek_event()
+
+            t.clear()
+            sb.draw()
+            t.present()
+            i += 1
+
 
 if __name__ == '__main__':
     main()
