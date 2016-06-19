@@ -153,9 +153,9 @@ class Mykazoo(KazooClient):
               """)
 
 
-def console(raw_data, iterm_name):
+def console(raw_data):
     try:
-        host, acl, auth = parser_config(raw_data)
+        host, acl, auth = parser_config(raw_data[1])
     except:
         raise RuntimeError
 
@@ -181,7 +181,7 @@ def console(raw_data, iterm_name):
         readline.parse_and_bind('tab: complete')
         readline.set_completer(zk.complete)
         while True:
-            cmd = raw_input('[{}]>> '.format(iterm_name)).split()
+            cmd = raw_input('[{}]>> '.format(raw_data[0])).split()
             if not cmd:
                 continue
             elif cmd[0] == 'up':
@@ -209,17 +209,14 @@ def load_config(file):
 def main():
     loader = load_config(CONFIG_FILE)
     while True:
-        # conn_data, show_name = interacter(loader)
-        conn_data, show_name = interacter1(loader)
-        print('My thing start!')
-        print('conn_data:\n {}'.format(conn_data))
-        print('show_name:\n {}'.format(show_name))
-        print('My thing end!')
-        return
+        conn_data = interacter(loader)
+        if conn_data is None:
+            print('Quit Select Hydra!')
+            return
 
         if conn_data:
             try:
-                console(conn_data, show_name)
+                console(conn_data)
             except KeyboardInterrupt:
                 loggerM.warn('Interrupt From Keyboard, Quit...')
                 break
@@ -258,55 +255,6 @@ def parser_config(data):
         auth = None
 
     return host, acl, auth
-
-
-# TODO convert to class, interacter login screen
-def interacter(menu):
-    import curses
-    defaultY = 0
-    cursorY = 3
-    screen = curses.initscr()
-    screen.border(1, 20, 1, 20)
-    curses.noecho()
-    curses.curs_set(1)
-    screen.keypad(1)
-    screen.erase()
-
-    sumline = 0
-    dictMenu = {}
-    for title in menu:
-        screen.addstr(sumline, defaultY, '> {}.{}\n'.format(sumline, title))
-        dictMenu[sumline] = title
-        sumline += 1
-    screen.addstr(sumline, defaultY, '> {}.Quit'.format(sumline))
-    dictMenu[sumline] = 'Quit'
-
-    cursor = 0
-    screen.move(cursor, cursorY)
-    try:
-        while True:
-            event = screen.getch()
-            if event == curses.KEY_ENTER or event == 10:
-                if cursor == sumline:
-                    return False
-                else:
-                    return menu[dictMenu[cursor]], dictMenu[cursor]
-            elif event == curses.KEY_UP:
-                if cursor == 0:
-                    cursor = sumline
-                else:
-                    cursor -= 1
-            elif event == curses.KEY_DOWN:
-                if cursor < sumline:
-                    cursor += 1
-                else:
-                    cursor = 0
-            screen.move(cursor, cursorY)
-            screen.refresh()
-    except KeyboardInterrupt:
-        return False
-    finally:
-        curses.endwin()
 
 
 class SelectBox(object):
@@ -362,7 +310,7 @@ class SelectBox(object):
             tb.change_cell(x + i, y, c, fg, bg)
 
 
-def interacter1(menu):
+def interacter(menu):
     with termbox.Termbox() as t:
         sb = SelectBox(t, menu, 0)
         t.clear()
@@ -376,7 +324,7 @@ def interacter1(menu):
                 (type, ch, key, mod, w, h, x, y) = event_here
                 if type == termbox.EVENT_KEY and key == termbox.KEY_ESC:
                     run_app = False
-                    return 'xxx', 'xxx'
+                    return None, None
                 if type == termbox.EVENT_KEY:
                     if key == termbox.KEY_CTRL_J or key == termbox.KEY_ARROW_DOWN:
                         sb.move_down()
@@ -386,9 +334,8 @@ def interacter1(menu):
                         sb.set_active(0)
                     elif key == termbox.KEY_CTRL_D:
                         sb.set_active(len(sb.choices) - 1)
-                    # TODO enter process need to accomplish
                     elif key == termbox.KEY_ENTER:
-                        pass
+                        return (menu.items()[sb.active])
                 event_here = t.peek_event()
 
             t.clear()
