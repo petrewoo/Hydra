@@ -139,6 +139,7 @@ class Mykazoo(KazooClient):
         return response
 
     def usage(self):
+        # TODO add color usage
         print("""Usage:
                  delete path
                  rmr path
@@ -211,7 +212,7 @@ def main():
     while True:
         conn_data = interacter(loader)
         if conn_data is None:
-            print('Quit Select Hydra!')
+            loggerM.info('Quit Hydra!')
             return
 
         if conn_data:
@@ -324,7 +325,7 @@ def interacter(menu):
                 (type, ch, key, mod, w, h, x, y) = event_here
                 if type == termbox.EVENT_KEY and key == termbox.KEY_ESC:
                     run_app = False
-                    return None, None
+                    return None
                 if type == termbox.EVENT_KEY:
                     if key == termbox.KEY_CTRL_J or key == termbox.KEY_ARROW_DOWN:
                         sb.move_down()
