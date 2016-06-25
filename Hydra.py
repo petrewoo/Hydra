@@ -19,7 +19,7 @@ handler = logging.StreamHandler()
 fmt = logging.Formatter(FORMAT)
 handler.setFormatter(fmt)
 loggerM.addHandler(handler)
-COMMAND_SET = ('ls', 'add', 'create', 'delete', 'rmr', 'set', 'setAcl', 'get', 'getAcl', 'initcfg', 'quit')
+COMMAND_SET = ('ls', 'add', 'create', 'delete', 'rmr', 'set', 'setAcl', 'get', 'getAcl', 'initcfg', 'up')
 CONFIG_FILE = 'zkSerconfig.yaml'
 INIT_FILE = 'zkInitconfig.yaml'
 
@@ -28,7 +28,7 @@ class Mykazoo(KazooClient):
     # TODO full command set just like ZooKeeper client
     # TODO Mykazoo without initfile and options Mykazoo is KazooClient
     def __init__(self, initfile=None, options=None, *args, **kwargs):
-        self.login_info= initfile
+        self.login_info = initfile
         self.options = options
         self.current_candidates = []
         super(Mykazoo, self).__init__(*args, **kwargs)
@@ -95,10 +95,11 @@ class Mykazoo(KazooClient):
             loggerM.warn('Init file not specified, plz check out...')
             return
 
-        loader = self._load_initconfig(self.login_info)
+        loader = self.load_config(self.login_info)
         print loader
 
-    def _load_initconfig(self, file):
+    @staticmethod
+    def load_config(file):
         with open(file, 'r') as f:
             return yaml.load(f, Loader=yamlordereddictloader.Loader)
 
@@ -202,13 +203,8 @@ def console(raw_data):
         zk.stop()
 
 
-def load_config(file):
-    with open(file, 'r') as f:
-        return yaml.load(f, Loader=yamlordereddictloader.Loader)
-
-
 def main():
-    loader = load_config(CONFIG_FILE)
+    loader = Mykazoo.load_config(CONFIG_FILE)
     while True:
         conn_data = interacter(loader)
         if conn_data is None:
