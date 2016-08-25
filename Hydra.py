@@ -4,9 +4,9 @@
 from kazoo.client import KazooClient
 import logging
 import readline
-import yaml
-import yamlordereddictloader
 import termbox
+import utils
+import argparse
 # import pdb, traceback, sys
 
 # TODO add logger utility for py module
@@ -19,7 +19,6 @@ handler = logging.StreamHandler()
 fmt = logging.Formatter(FORMAT)
 handler.setFormatter(fmt)
 loggerM.addHandler(handler)
-COMMAND_SET = ('ls', 'add', 'create', 'delete', 'rmr', 'set', 'setAcl', 'get', 'getAcl', 'initcfg', 'up')
 CONFIG_FILE = 'zkSerconfig.yaml'
 INIT_FILE = 'zkInitconfig.yaml'
 
@@ -27,9 +26,10 @@ INIT_FILE = 'zkInitconfig.yaml'
 class Mykazoo(KazooClient):
     # TODO full command set just like ZooKeeper client
     # TODO Mykazoo without initfile and options Mykazoo is KazooClient
-    def __init__(self, initfile=None, options=None, *args, **kwargs):
+    options = ('ls', 'add', 'create', 'delete', 'rmr', 'set', 'setAcl', 'get', 'getAcl', 'initcfg', 'up')
+
+    def __init__(self, initfile=None, *args, **kwargs):
         self.login_info = initfile
-        self.options = options
         self.current_candidates = []
         super(Mykazoo, self).__init__(*args, **kwargs)
 
@@ -95,15 +95,10 @@ class Mykazoo(KazooClient):
             loggerM.warn('Init file not specified, plz check out...')
             return
 
-        loader = self.load_config(self.login_info)
+        loader = utils.load_config(self.login_info)
         print loader
 
-    @staticmethod
-    def load_config(file):
-        with open(file, 'r') as f:
-            return yaml.load(f, Loader=yamlordereddictloader.Loader)
-
-    def complete(self, text, state):
+    def _complete(self, text, state):
         if not self.options:
             return
 
@@ -164,7 +159,7 @@ def console(raw_data):
     loggerM.debug('host {}, acl {}, auth {}'.format(host, acl, auth))
 
     try:
-        zk = Mykazoo(INIT_FILE, COMMAND_SET, host, default_acl=acl, auth_data=auth)
+        zk = Mykazoo(INIT_FILE, host, default_acl=acl, auth_data=auth)
     except:
         pass
 
@@ -181,14 +176,14 @@ def console(raw_data):
 
     try:
         readline.parse_and_bind('tab: complete')
-        readline.set_completer(zk.complete)
+        readline.set_completer(zk._complete)
         while True:
             cmd = raw_input('[{}]>> '.format(raw_data[0])).split()
             if not cmd:
                 continue
             elif cmd[0] == 'up':
                 break
-            elif cmd[0] in COMMAND_SET:
+            elif cmd[0] in zk.options:
                 try:
                     getattr(zk, cmd[0])(*cmd[1:])
                 except:
@@ -204,7 +199,7 @@ def console(raw_data):
 
 
 def main():
-    loader = Mykazoo.load_config(CONFIG_FILE)
+    loader = utils.load_config(CONFIG_FILE)
     while True:
         conn_data = interacter(loader)
         if conn_data is None:
@@ -340,6 +335,13 @@ def interacter(menu):
             t.present()
             i += 1
 
+
+def parse():
+    parser = argparse.ArgumentParser(description='Fuzzy finder and CLI for Zookeeper')
+    parser.add_argument('-c', dest='zk_ser_conf', help='Zookeeper login configuration', type=str, default='zkSerconfig.yaml')
+    parser.add_argument('-i', dest='zk_init_conf', help='Zookeeper init configuration', type=str, default='zkInitconfig.yaml')
+    parser.add_argument('--version', action='version', version='%(prog)s 0.2')
+    return parser.parse_args()
 
 if __name__ == '__main__':
     main()
