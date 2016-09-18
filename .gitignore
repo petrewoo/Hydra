@@ -1,3 +1,4 @@
 *.pyc
 *.yaml
 !*.sample.yaml
+**/.DS_Store

@@ -12,21 +12,22 @@ import argparse
 # TODO add logger utility for py module
 # logging.basicConfig(level=logging.DEBUG)
 FORMAT = '%(asctime)s %(name)s %(levelname)s %(message)s'
-loggerM = logging.getLogger('Hydra.')
+loggerM = logging.getLogger(__name__)
 # loggerM.setLevel(logging.DEBUG)
 loggerM.setLevel(logging.INFO)
 handler = logging.StreamHandler()
 fmt = logging.Formatter(FORMAT)
 handler.setFormatter(fmt)
 loggerM.addHandler(handler)
-CONFIG_FILE = 'zkSerconfig.yaml'
-INIT_FILE = 'zkInitconfig.yaml'
+CONFIG_FILE = './config/zkSerconfig.yaml'
+INIT_FILE = './config/zkInitconfig.yaml'
 
 
 class Mykazoo(KazooClient):
     # TODO full command set just like ZooKeeper client
     # TODO Mykazoo without initfile and options Mykazoo is KazooClient
-    options = ('ls', 'add', 'create', 'delete', 'rmr', 'set', 'setAcl', 'get', 'getAcl', 'initcfg', 'up')
+    options = ('ls', 'add', 'create', 'delete', 'rmr', 'set', 'setAcl',
+               'get', 'getAcl', 'initcfg', 'up')
 
     def __init__(self, initfile=None, *args, **kwargs):
         self.login_info = initfile
@@ -83,7 +84,8 @@ class Mykazoo(KazooClient):
             loggerM.warn("Znode {} Already exists...".format(path))
 
     def add(self, path):
-        loggerM.info('createAcl path is {} acl is {}'.format(path, self.default_acl))
+        loggerM.info('createAcl path is {} acl is {}'.format(
+            path, self.default_acl))
         if not self.exists(path):
             self.ensure_path(path)
         else:
@@ -123,7 +125,8 @@ class Mykazoo(KazooClient):
                 loggerM.debug('candidates:'.format(candidates))
 
             if being_completed:
-                self.current_candidates = [w for w in candidates if w.startswith(being_completed)]
+                self.current_candidates = \
+                    [w for w in candidates if w.startswith(being_completed)]
             else:
                 self.current_candidates = candidates
 
@@ -131,7 +134,8 @@ class Mykazoo(KazooClient):
             response = self.current_candidates[state]
         except IndexError:
             response = None
-        loggerM.debug('complete({}, {}) => {}'.format(repr(text), state, repr(response)))
+        loggerM.debug('complete({}, {}) => {}'.format(
+            repr(text), state, repr(response)))
         return response
 
     def usage(self):
@@ -230,7 +234,8 @@ def parser_config(data):
             loggerM.warn('Invalid k {}, v {} in the config data'.format(k, v))
             pass
 
-    loggerM.debug('Load data host is {}, raw_auth_data is {}'.format(host, raw_auth_data))
+    loggerM.debug('Load data host is {}, raw_auth_data is {}'.format(
+        host, raw_auth_data))
     # TODO If None in config file, raise Exception
     if not host:
         loggerM.warn('Invalid value in config file, plz check out.')
@@ -337,9 +342,14 @@ def interacter(menu):
 
 
 def parse():
-    parser = argparse.ArgumentParser(description='Fuzzy finder and CLI for Zookeeper')
-    parser.add_argument('-c', dest='zk_ser_conf', help='Zookeeper login configuration', type=str, default='zkSerconfig.yaml')
-    parser.add_argument('-i', dest='zk_init_conf', help='Zookeeper init configuration', type=str, default='zkInitconfig.yaml')
+    parser = argparse.ArgumentParser(
+        description='Fuzzy finder and CLI for Zookeeper')
+    parser.add_argument('-c', dest='zk_ser_conf',
+                        help='Zookeeper login configuration',
+                        type=str, default='zkSerconfig.yaml')
+    parser.add_argument('-i', dest='zk_init_conf',
+                        help='Zookeeper init configuration',
+                        type=str, default='zkInitconfig.yaml')
     parser.add_argument('--version', action='version', version='%(prog)s 0.2')
     return parser.parse_args()
 
