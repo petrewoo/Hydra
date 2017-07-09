@@ -7,6 +7,10 @@ import readline
 import termbox
 import utils
 import argparse
+from prompt_toolkit import prompt
+from prompt_toolkit.history import FileHistory
+from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
+from prompt_toolkit.contrib.completers import WordCompleter
 # import pdb, traceback, sys
 
 # TODO add logger utility for py module
@@ -19,8 +23,14 @@ handler = logging.StreamHandler()
 fmt = logging.Formatter(FORMAT)
 handler.setFormatter(fmt)
 loggerM.addHandler(handler)
-CONFIG_FILE = './config/zkSerconfig.yaml'
-INIT_FILE = './config/zkInitconfig.yaml'
+CONFIG_FILE = './conf/zkSerconfig.yaml'
+INIT_FILE = './conf/zkInitconfig.yaml'
+OPT_HIS_LOG = ''
+
+
+ZkCompleter = WordCompleter([
+    'ls', 'add', 'create', 'delete', 'rmr', 'set', 'setAcl',
+    'get', 'getAcl', 'initcfg', 'up'], ignore_case=True)
 
 
 class Mykazoo(KazooClient):
@@ -179,25 +189,17 @@ def console(raw_data):
         return RuntimeError
 
     try:
-        readline.parse_and_bind('tab: complete')
-        readline.set_completer(zk._complete)
-        while True:
-            cmd = raw_input('[{}]>> '.format(raw_data[0])).split()
-            if not cmd:
+        while 1:
+            cli_input = prompt(u"$>> ",
+                               history=FileHistory('./logs/cli_hist.txt'),
+                               auto_suggest=AutoSuggestFromHistory(),
+                               completer=ZkCompleter,)
+            if not cli_input:
                 continue
-            elif cmd[0] == 'up':
+            elif cli_input == 'up':
                 break
-            elif cmd[0] in zk.options:
-                try:
-                    getattr(zk, cmd[0])(*cmd[1:])
-                except:
-                    # type, value, tb = sys.exc_info()
-                    # traceback.print_exc()
-                    # pdb.post_mortem(tb)
-                    loggerM.warn('api {} call failed!!'.format(cmd[0]))
-                    getattr(zk, 'usage')()
             else:
-                getattr(zk, 'usage')()
+                print cli_input
     finally:
         zk.stop()
 
@@ -352,6 +354,7 @@ def parse():
                         type=str, default='zkInitconfig.yaml')
     parser.add_argument('--version', action='version', version='%(prog)s 0.2')
     return parser.parse_args()
+
 
 if __name__ == '__main__':
     main()
