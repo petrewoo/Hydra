@@ -2,3 +2,4 @@
 *.yaml
 !*.sample.yaml
 **/.DS_Store
+*.txt
