@@ -2,35 +2,25 @@
 # -*- encoding: utf-8 -*-
 
 import logging
-import readline
 import termbox
 import utils
-import argparse
 import click
-import os
 
-from kazoo.client import KazooClient
+from threading import Thread
+from fuzzyfinder import fuzzyfinder
 from prompt_toolkit import prompt
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
-from prompt_toolkit.contrib.completers import WordCompleter
+from prompt_toolkit.completion import Completer, Completion
+from zkcli import Client, parse_auth
+from conf import CONF_FILE, INIT_FILE, HIST_FILE
 # import pdb, traceback, sys
 
-# TODO add logger utility for py module
-# logging.basicConfig(level=logging.DEBUG)
-FORMAT = '%(asctime)s %(name)s %(levelname)s %(message)s'
-logger = logging.getLogger(__name__)
-# logger.setLevel(logging.DEBUG)
-logger.setLevel(logging.INFO)
-handler = logging.StreamHandler()
-fmt = logging.Formatter(FORMAT)
-handler.setFormatter(fmt)
-logger.addHandler(handler)
 
+logger = logging.getLogger(__file__)
 
-CONFIG_FILE = './conf/zkSerconfig.yaml'
-INIT_FILE = './conf/zkInitconfig.yaml'
-OPT_HIS_LOG = './logs/cli_hist.txt'
+operations = ['ls', 'add', 'create', 'delete', 'rmr', 'set',
+              'setAcl', 'get', 'getAcl', 'initcfg', 'up']
 
 
 def logger_conf(debug_mode):
@@ -41,184 +31,62 @@ def logger_conf(debug_mode):
         logging.basicConfig(level=logging.INFO, format=logger_fmt)
 
 
-ZkCompleter = WordCompleter([
-    'ls', 'add', 'create', 'delete', 'rmr', 'set', 'setAcl',
-    'get', 'getAcl', 'initcfg', 'up'], ignore_case=True)
+def parser_config(data):
+    host = data.get('server', '')
+    auth = data.get('auth', '')
+
+    logger.debug('Conf host is {}, auth is {}'.format(host, auth))
+
+    # TODO If None in config file, raise Exception
+    if not host:
+        logger.warn('Invalid value in config file, plz check out.')
+        raise RuntimeError
+
+    # If raw_auth_data is None, login as anonymous
+    acl, auth_data = parse_auth(auth)
+    return host, acl, auth_data
 
 
-class Mykazoo(KazooClient):
-    # TODO full command set just like ZooKeeper client
-    # TODO Mykazoo without initfile and options Mykazoo is KazooClient
-    options = ('ls', 'add', 'create', 'delete', 'rmr', 'set', 'setAcl',
-               'get', 'getAcl', 'initcfg', 'up')
+class ZkCompleter(Completer):
 
-    def __init__(self, initfile=None, *args, **kwargs):
-        self.login_info = initfile
-        self.current_candidates = []
-        super(Mykazoo, self).__init__(*args, **kwargs)
+    def __init__(self, completer):
+        self._completer = completer
 
-    def ls(self, path):
-        logger.debug('ls path is {}'.format(path))
-        try:
-            attr_list = self.get_children(path)
-            attr_list.sort()
-            for attr in attr_list:
-                print(attr)
-        except:
-            logger.warn('{} try get_children wrong'.format(path))
-            pass
-
-    def _auto_completer(self, path):
-        attr_list = self.get_children(path) or []
-        return attr_list
-
-    def set(self, path, value):
-        super(Mykazoo, self).set(path, value)
-
-    def setAcl(self, path):
-        super(Mykazoo, self).set_acls(path, self.default_acl)
-
-    def get(self, path):
-        print('{}'.format(super(Mykazoo, self).get(path)[0]))
-
-    def getAcl(self, path):
-        print('{}'.format(super(Mykazoo, self).get_acls(path)[0]))
-
-    # TODO delete command support regular expression operations yep that is cool
-    def delete(self, path):
-        logger.info('delete path is {}'.format(path))
-        if not self.exists(path):
-            logger.warn("Znode {} is empty".format(path))
-        else:
-            super(Mykazoo, self).delete(path)
-
-    def rmr(self, path):
-        logger.info('rmr path is {}'.format(path))
-        if not self.exists(path):
-            logger.warn("Znode {} is empty".format(path))
-        else:
-            super(Mykazoo, self).delete(path, recursive=True)
-
-    def create(self, path, value):
-        logger.info('create path is {}'.format(path))
-        if not self.exists(path):
-            super(Mykazoo, self).create(path, value, makepath=True)
-        else:
-            logger.warn("Znode {} Already exists...".format(path))
-
-    def add(self, path):
-        logger.info('createAcl path is {} acl is {}'.format(
-            path, self.default_acl))
-        if not self.exists(path):
-            self.ensure_path(path)
-        else:
-            logger.warn("Znode {} Already exists...".format(path))
-
-    def initcfg(self):
-        # TODO i wanna init some config for zookeeper from init.yaml
-        if not self.login_info:
-            logger.warn('Init file not specified, plz check out...')
-            return
-
-        loader = utils.load_config(self.login_info)
-        print loader
-
-    def _complete(self, text, state):
-        if not self.options:
-            return
-
-        response = []
-        if state == 0:
-            origline = readline.get_line_buffer()
-            begin = readline.get_begidx()
-            end = readline.get_endidx()
-            being_completed = origline[begin:end]
-
-            logger.debug('origline={}'.format(repr(origline)))
-            logger.debug('begin={}, end={}'.format(begin, end))
-
-            if begin == 0:
-                candidates = self.options
-            else:
-                idx = origline[0:begin + 1].find(' ')
-                if idx:
-                    path = origline[idx + 1:begin]
-                logger.debug('path :{}'.format(path))
-                candidates = self._auto_completer(path)
-                logger.debug('candidates:'.format(candidates))
-
-            if being_completed:
-                self.current_candidates = \
-                    [w for w in candidates if w.startswith(being_completed)]
-            else:
-                self.current_candidates = candidates
-
-        try:
-            response = self.current_candidates[state]
-        except IndexError:
-            response = None
-        logger.debug('complete({}, {}) => {}'.format(
-            repr(text), state, repr(response)))
-        return response
-
-    def usage(self):
-        # TODO add color usage
-        print("""Usage:
-                 delete path
-                 rmr path
-                 create path data
-                 add path
-                 ls path
-                 get path
-                 getAcl path
-                 set path data
-                 setAcl path
-                 initcfg InitConfig.sample.yaml
-              """)
+    def get_completions(self, document, complete_event):
+        word_before_cursor = document.get_word_before_cursor(WORD=True)
+        matches = fuzzyfinder(word_before_cursor, self._completer)
+        for m in matches:
+            yield Completion(m, start_position=-len(word_before_cursor))
 
 
 def console(raw_data):
     try:
         host, acl, auth = parser_config(raw_data[1])
-    except:
+    except Exception:
         raise RuntimeError
 
     logger.debug('host {}, acl {}, auth {}'.format(host, acl, auth))
 
-    try:
-        zk = Mykazoo(INIT_FILE, host, default_acl=acl, auth_data=auth)
-    except:
-        pass
-
-    # TODO more Exception process need to accomplish eg. connect timeout
-    try:
-        logger.info('ZkServer is connecting...')
-        zk.start()
-        logger.info('ZkServer is connected!')
-    except KeyboardInterrupt:
-        raise KeyboardInterrupt
-    except:
-        logger.warn('ZkServer connect failed')
-        return RuntimeError
-
-    try:
-        while 1:
+    with Client(INIT_FILE, host, default_acl=acl, auth_data=auth) as zk:
+        zk.completer.extend(operations)
+        t = Thread(target=zk.get_all_nodes)
+        t.setDaemon(True)
+        t.start()
+        while True:
             cli_input = prompt(u"$>> ",
-                               history=FileHistory('./logs/cli_hist.txt'),
+                               history=FileHistory(HIST_FILE),
                                auto_suggest=AutoSuggestFromHistory(),
-                               completer=ZkCompleter,)
+                               completer=ZkCompleter(zk.completer))
             if not cli_input:
                 continue
             elif cli_input == 'up':
                 break
             else:
                 print cli_input
-    finally:
-        zk.stop()
 
 
-def main():
-    loader = utils.load_config(CONFIG_FILE)
+def main(conf, init):
+    loader = utils.load_config(conf)
     while True:
         conn_data = interacter(loader)
         if conn_data is None:
@@ -231,42 +99,12 @@ def main():
             except KeyboardInterrupt:
                 logger.warn('Interrupt From Keyboard, Quit...')
                 break
-            except:
+            except Exception as e:
+                logger.warn(e)
                 logger.warn('Something wrong happened, Quit gracefully...')
                 break
         else:
             break
-
-
-def parser_config(data):
-    import kazoo.security as ks
-    for k, v in data.iteritems():
-        if k == 'server':
-            host = v or ''
-        elif k == 'auth':
-            raw_auth_data = v or ''
-        else:
-            logger.warn('Invalid k {}, v {} in the config data'.format(k, v))
-            pass
-
-    logger.debug('Load data host is {}, raw_auth_data is {}'.format(
-        host, raw_auth_data))
-    # TODO If None in config file, raise Exception
-    if not host:
-        logger.warn('Invalid value in config file, plz check out.')
-        raise RuntimeError
-
-    # If raw_auth_data is None, login as anonymous
-    if raw_auth_data:
-        auth = []
-        usrpasswd = raw_auth_data.split(':')
-        acl = [ks.make_digest_acl(usrpasswd[0], usrpasswd[1], all=True)]
-        auth.append(('digest', raw_auth_data))
-    else:
-        acl = None
-        auth = None
-
-    return host, acl, auth
 
 
 class SelectBox(object):
@@ -314,10 +152,10 @@ class SelectBox(object):
 
     def _print_line(self, tb, msg, x, y, fg, bg):
         spaceord = ord(u" ")
-        l = len(msg)
-        for i in range(l):
+        length = len(msg)
+        for i in range(length):
             c = spaceord
-            if i < l:
+            if i < length:
                 c = ord(msg[i])
             tb.change_cell(x + i, y, c, fg, bg)
 
@@ -356,24 +194,18 @@ def interacter(menu):
             i += 1
 
 
-def parse():
-    parser = argparse.ArgumentParser(
-        description='Fuzzy finder and CLI for Zookeeper')
-    parser.add_argument('-c', dest='zk_ser_conf',
-                        help='Zookeeper login configuration',
-                        type=str, default='zkSerconfig.yaml')
-    parser.add_argument('-i', dest='zk_init_conf',
-                        help='Zookeeper init configuration',
-                        type=str, default='zkInitconfig.yaml')
-    parser.add_argument('--version', action='version', version='%(prog)s 0.2')
-    return parser.parse_args()
-
-
 @click.command()
 @click.option('--debug', is_flag=True)
-def start(debug):
-    pass
+@click.option('-c', '--conf',
+              default=CONF_FILE,
+              help='Configuration of zookeeper server.')
+@click.option('-i', '--init',
+              default=INIT_FILE,
+              help='Init configuration of zookeeper structure.')
+def start(debug, conf, init):
+    logger_conf(debug)
+    main(conf, init)
 
 
 if __name__ == '__main__':
-    main()
+    start()
