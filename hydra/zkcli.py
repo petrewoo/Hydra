@@ -5,6 +5,7 @@ import logging
 
 import utils
 from kazoo.client import KazooClient
+from kazoo import exceptions
 
 logger = logging.getLogger(__file__)
 
@@ -36,6 +37,8 @@ class Client(KazooClient):
             attr_list.sort()
             for attr in attr_list:
                 print(attr)
+        except exceptions.NoAuthError:
+            logger.warn('Path:{}, has No Auth access data'.format(path))
         except Exception as e:
             logger.warn(e, '{} try get_children wrong'.format(path))
             pass
@@ -126,14 +129,17 @@ class Client(KazooClient):
 
     def _get_nodes(self, root_path):
         self.completer.append(root_path)
-        attr_list = self.get_children(root_path)
-        if attr_list:
-            for attr in attr_list:
-                if root_path == '/':
-                    new_root = root_path + attr
-                else:
-                    new_root = root_path + '/' + attr
-                self._get_nodes(new_root)
+        try:
+            attr_list = self.get_children(root_path)
+            if attr_list:
+                for attr in attr_list:
+                    if root_path == '/':
+                        new_root = root_path + attr
+                    else:
+                        new_root = root_path + '/' + attr
+                    self._get_nodes(new_root)
+        except exceptions.NoAuthError:
+            pass
 
     def get_all_nodes(self):
         self._get_nodes('/')
