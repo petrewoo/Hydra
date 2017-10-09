@@ -1,3 +1,4 @@
-yaml
+PyYAML
 yamlordereddictloader
 prompt_toolkit
+termbox
