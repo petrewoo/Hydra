@@ -19,8 +19,8 @@ from conf import CONF_FILE, INIT_FILE, HIST_FILE
 
 logger = logging.getLogger(__file__)
 
-operations = ['ls', 'add', 'create', 'delete', 'rmr', 'set',
-              'setAcl', 'get', 'getAcl', 'initcfg', 'up']
+operations = ('ls', 'add', 'create', 'delete', 'rmr', 'set',
+              'setAcl', 'get', 'getAcl', 'initcfg', 'up')
 
 
 def logger_conf(debug_mode):
@@ -73,7 +73,7 @@ def console(raw_data):
         t.setDaemon(True)
         t.start()
         while True:
-            cli_input = prompt(u"$>> ",
+            cli_input = prompt(u"$[{}]>> ".format(raw_data[0]),
                                history=FileHistory(HIST_FILE),
                                auto_suggest=AutoSuggestFromHistory(),
                                completer=ZkCompleter(zk.completer))
@@ -82,7 +82,18 @@ def console(raw_data):
             elif cli_input == 'up':
                 break
             else:
-                print cli_input
+                cmds = cli_input.split()
+                logger.debug('{}'.format(cmds))
+                logger.debug('type of value is {}'.format(type(cmds[-1])))
+                if cmds[0] in operations:
+                    try:
+                        getattr(zk, cmds[0])(*cmds[1:])
+                    except Exception as e:
+                        logger.error(e)
+                        logger.warning('api {} call failed!!'.format(cmds[0]))
+                        getattr(zk, 'usage')()
+                else:
+                    getattr(zk, 'usage')()
 
 
 def main(conf, init):

@@ -2,12 +2,24 @@
 # -*- encoding: utf-8 -*-
 
 import logging
+from functools import wraps
+from inspect import getcallargs
 
 import utils
 from kazoo.client import KazooClient
 from kazoo import exceptions
 
 logger = logging.getLogger(__file__)
+
+
+def convert(f):
+    @wraps(f)
+    def _(*args, **kwargs):
+        args_dict = getcallargs(f, *args, **kwargs)
+        if 'value' in args_dict:
+            args_dict['value'] = str(args_dict['value'])
+        return f(**args_dict)
+    return _
 
 
 class Singleton(type):
@@ -43,6 +55,7 @@ class Client(KazooClient):
             logger.warn(e, '{} try get_children wrong'.format(path))
             pass
 
+    @convert
     def set(self, path, value):
         super(Client, self).set(path, value)
 
@@ -70,6 +83,7 @@ class Client(KazooClient):
         else:
             super(Client, self).delete(path, recursive=True)
 
+    @convert
     def create(self, path, value):
         logger.info('create path is {}'.format(path))
         if not self.exists(path):
