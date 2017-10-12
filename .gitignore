@@ -1,6 +1,5 @@
-*.py
 *.pyc
 *.yaml
-*.bkp
 !*.sample.yaml
-!Hydra.py
+**/.DS_Store
+*.txt
